@@ -1,7 +1,6 @@
 
 ### 概述
-RETableViewManager 的 Swift 版本
-之前的项目使用RETableViewManager，在构建基于UITableView的列表页面时候，可以做到极大的复用和快速渲染
+SZCollectionViewManager适用于UIKit快速根据Data快速构建CollectionView列表
 
 * 核心理念：数据驱动
 
@@ -9,106 +8,95 @@ RETableViewManager 的 Swift 版本
 * 0、理论 item-cell 是一一对应的关系 
 
 
-* 1、Tableview的移动和删除逻辑（tbd）
-* 2、UITableViewDelegate的外部代理出去（tbd）
-
-
 ### 实践
-1、自定义 `SZTableViewCell` 和 `SZTableViewItem` 的子类
+1、自定义 `SZCollectionCell` 和 `SZCollectionItem` 的子类
 ```
-class ImageTitleCell: SZTableViewCell {
-    lazy var titleLbl: UILabel = {
-        let lbl = UILabel()
-        lbl.text = ""
-        lbl.textColor = .blue
-        lbl.font = .systemFont(ofSize: 16)
-        return lbl
-    }()
-    lazy var iconImgV: UIImageView = {
+class SZImageCollectionCell : SZCollectionCell {
+    lazy var imageView: UIImageView = {
         let imgV = UIImageView()
-        imgV.image = UIImage.init(named: "facebook")
+        imgV.contentMode = .scaleAspectFill
+        imgV.clipsToBounds = true
         return imgV
     }()
-    
-    // 加载一次，cell创建
-    override func didLoad(_ item: SZTableViewItem?) {
+    override func didLoad(_ item: SZCollectionItem?) {
         super.didLoad(item)
-        if let cellItem = item as? ImageTitleCellItem {
-            print("\(#function) \(cellItem.title)")
-            self.iconImgV.frame = CGRect(x: 5, y: 5, width: 50, height: 50)
-            self.contentView.addSubview(self.iconImgV)
-
-            self.titleLbl.frame = CGRect(x: 60, y: 5, width: 150, height: 20)
-            self.contentView.addSubview(self.titleLbl)
+        self.contentView.backgroundColor = .orange
+        self.contentView.addSubview(imageView)
+        imageView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
         }
     }
-
-    // cell数据的更新
-    override func didUpdate(_ item: SZTableViewItem?) {
-        if let cellItem = item as? ImageTitleCellItem {
-            print("\(#function) \(cellItem.title)")
-            self.titleLbl.text = cellItem.title
-        }
-    }
-
-
-    // cell will display
-    override func willAppear(_ item: SZTableViewItem?) {
-        
-    }
-    // cell did end display
-    override func didDisappear(_ item: SZTableViewItem?) {
-        
-    }
-}
-
-
-class ImageTitleCellItem : SZTableViewItem {
-    var title: String = ""
     
-    // 返回对应的cell
-    override class var cellClass: AnyClass {
-        return ImageTitleCell.self
-    }
-    // 返回Cell的高度
-    override func calcCellHeight() -> Float {
-        return 80.0
+    override func didUpdate(_ item: SZCollectionItem?) {
+        super.didLoad(item)
+        guard let cellItem = item as? SZImageCollectionCellItem else {
+            return
+        }
+        
+        imageView.kf.setImage(with: URL.init(string: cellItem.imageUrl ?? ""))
     }
 }
 
+class SZImageCollectionCellItem : SZCollectionItem {
+    var imageUrl: String?
+    override class var cellClass: AnyClass {
+        return SZImageCollectionCell.self
+    }
+    
+    override open func calcItemSize() -> CGSize {
+        return CGSize(width: UIScreen.main.bounds.size.width-20*2, height: 180)
+    }
+}
 ```
 
-2、创建Manager
+2、创建 Manager 和 CollectionView
 ```
 // ViewController
-lazy var tableview: UITableView = {
-    let tblV = UITableView(frame:self.view.bounds, style:.plain)
-    return tblV
+lazy var manager: SZCollectionManager = {
+    return SZCollectionManager.init()
+}()
+lazy var collectionView: UICollectionView = {
+    let layout = UICollectionViewFlowLayout()
+    layout.scrollDirection = .horizontal
+
+    let collect = UICollectionView(frame: .zero, collectionViewLayout: layout)
+    collect.backgroundColor = .darkGray
+    collect.isPagingEnabled = true
+    return collect
 }()
 
+// 绑定
+self.view.addSubview(self.collectionView)
+self.collectionView.snp.makeConstraints { make in
+    make.leading.equalTo(20)
+    make.trailing.equalTo(-20)
 
-// manager
-let tblManager: SZTableViewManager = SZTableViewManager()
-self.view.addSubview(self.tableview)
+    make.centerY.equalToSuperview()
+    make.height.equalTo(200)
+}
 
-// 关联tableview
-tblManager.bindTableView(self.tableview)
-tblManager.registerList([
-    SZTitleCellItem.self,
-    ImageTitleCellItem.self
+self.manager.bindAndRegister(self.collectionView, [
+    SZImageCollectionCellItem.self,
 ])
 
-// 创建section
-let section: SZTableViewSection = SZTableViewSection.init()
 
-let item = SZTitleCellItem()
-item.title = "TitleCell \(i)"
-item.action.selected = { (_ vi: SZTableViewItem? ,_ tblMgr: SZTableViewManager) in
-    if let cellItem = vi as? SZTitleCellItem {
-        print("click: \(cellItem.title)")
-    }
+// 创建数据
+var imageList = [
+    "https://t7.baidu.com/it/u=2621658848,3952322712&fm=193&f=GIF",
+    "https://t7.baidu.com/it/u=3631608752,3069876728&fm=193&f=GIF",
+    "https://t7.baidu.com/it/u=1415984692,3889465312&fm=193&f=GIF",
+    "https://t7.baidu.com/it/u=4080826490,615918710&fm=193&f=GIF",
+    "https://t7.baidu.com/it/u=334080491,3307726294&fm=193&f=GIF"
+]
+
+var list = [SZImageCollectionCellItem]()
+for url in imageList {
+    let item = SZImageCollectionCellItem()
+    item.imageUrl = url
+    list.append(item)
 }
-section.addItem(item)
 
-tblManager.addSection(section)
+let section = SZCollectionSection()
+section.addItemList(list)
+self.manager.addSection(section)
 ```
